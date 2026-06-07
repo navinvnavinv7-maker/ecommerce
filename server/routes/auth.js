@@ -18,6 +18,7 @@ const createJwtToken = (id, username, email, role) => {
 
 // USER REGISTRATION
 router.post('/register', async (req, res) => {
+  console.log('Register body:', req.body); // ← add this line
   const { username, email, password } = req.body;
 
   if (!username || !email || !password) {

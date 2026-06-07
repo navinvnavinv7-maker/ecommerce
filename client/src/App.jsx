@@ -347,14 +347,16 @@ export default function App() {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('nexus_token');
-    localStorage.removeItem('nexus_user');
-    setCurrentUser(null);
-    setUserRole('customer');
-    setActiveTab('shop');
-    triggerToast("Logged out successfully.");
-  };
+// Add setCart([]) to logout in App.jsx
+const logout = () => {
+  localStorage.removeItem('nexus_token');
+  localStorage.removeItem('nexus_user');
+  setCurrentUser(null);
+  setUserRole('customer');
+  setCart([]);        // ← add this!
+  setActiveTab('shop');
+  triggerToast("Logged out successfully.");
+};
 
   const openLoginModal = () => {
     setShowAuthModal(true);
