@@ -4,8 +4,6 @@ import { ShoppingCart, User, RefreshCw, Layers } from 'lucide-react';
 export default function Navbar({
   activeTab,
   setActiveTab,
-  userRole,
-  setUserRole,
   cartItemCount,
   loadDataFromServer,
   isLoading,
@@ -14,6 +12,8 @@ export default function Navbar({
   logout,
   openLoginModal
 }) {
+  const isAdmin = currentUser?.role === 'admin';
+
   return (
     <header id="app_navbar" className="sticky top-0 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-900 z-40 transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
@@ -61,7 +61,7 @@ export default function Navbar({
           >
             Checkout Form
           </button>
-          {userRole === 'admin' && (
+          {isAdmin && (
             <button
               id="tab_admin_btn"
               onClick={() => setActiveTab('admin')}
@@ -146,7 +146,7 @@ export default function Navbar({
               <option value="shop">Shop Catalog</option>
               <option value="cart">My Cart ({cartItemCount})</option>
               <option value="checkout">Checkout</option>
-              {userRole === 'admin' && <option value="admin">Admin Dashboard</option>}
+              {isAdmin && <option value="admin">Admin Dashboard</option>}
             </select>
           </div>
 

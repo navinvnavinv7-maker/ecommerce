@@ -4,12 +4,10 @@ import { RefreshCw } from 'lucide-react';
 export default function SystemStatusBanner({
   isLoading,
   loadDataFromServer,
-  userRole,
-  setUserRole,
-  activeTab,
-  setActiveTab,
-  triggerToast
+  currentUser
 }) {
+  const workspaceLabel = currentUser?.role === 'admin' ? 'Merchant Owner' : currentUser ? 'Customer' : 'Login Required';
+
   return (
     <div id="global_status_banner" className="bg-zinc-900 border-b border-zinc-800 text-zinc-400 px-4 py-1.5 text-xs font-mono flex justify-between items-center z-10">
       <div className="flex items-center gap-2">
@@ -28,28 +26,16 @@ export default function SystemStatusBanner({
           <span>Sync</span>
         </button>
         <div className="flex items-center gap-1.5 bg-zinc-850 px-2 py-0.5 rounded border border-zinc-750">
-          <span className="text-[10px] uppercase text-zinc-500 tracking-wider">Simulate Role:</span>
-          <button
-            id="role_customer_btn"
-            onClick={() => { 
-              setUserRole('customer'); 
-              triggerToast("Switched to Customer Context"); 
-              if (activeTab === 'admin') setActiveTab('shop'); 
-            }}
-            className={`px-1.5 py-0.5 text-[10px] rounded font-semibold whitespace-nowrap transition-colors ${userRole === 'customer' ? 'bg-amber-500 text-zinc-950' : 'text-zinc-400 hover:bg-zinc-800'}`}
-          >
-            Customer
-          </button>
-          <button
-            id="role_admin_btn"
-            onClick={() => { 
-              setUserRole('admin'); 
-              triggerToast("Switched to Developer Admin Context"); 
-            }}
-            className={`px-1.5 py-0.5 text-[10px] rounded font-semibold whitespace-nowrap transition-colors ${userRole === 'admin' ? 'bg-indigo-600 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800'}`}
-          >
-            Merchant
-          </button>
+          <span className="text-[10px] uppercase text-zinc-500 tracking-wider">Workspace:</span>
+          <span className={`px-1.5 py-0.5 text-[10px] rounded font-semibold whitespace-nowrap ${
+            currentUser?.role === 'admin'
+              ? 'bg-indigo-600 text-zinc-100'
+              : currentUser
+                ? 'bg-amber-500 text-zinc-950'
+                : 'bg-zinc-800 text-zinc-400'
+          }`}>
+            {workspaceLabel}
+          </span>
         </div>
       </div>
     </div>

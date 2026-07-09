@@ -16,13 +16,28 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    required: function() {
+      // Password is only required if neither googleId nor githubId is set
+      return !this.googleId && !this.githubId;
+    }
   },
   role: {
     type: String,
     enum: ['customer', 'admin'],
     default: 'customer'
-  }
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  verificationToken: String,
+  verificationTokenExpires: Date,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
+  otp: String,
+  otpExpires: Date,
+  googleId: String,
+  githubId: String
 }, {
   timestamps: true
 });

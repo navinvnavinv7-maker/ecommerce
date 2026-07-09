@@ -113,54 +113,108 @@ export default function AdminView({
           {/* Table Layout */}
           <div className="bg-zinc-900/30 border border-zinc-900 rounded-xl overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[700px]">
+              <table className="w-full text-left border-collapse min-w-[820px]">
                 <thead>
                   <tr className="border-b border-zinc-900 bg-zinc-950 text-zinc-500 text-[10px] uppercase tracking-wider font-mono">
-                    <th className="p-4">SKU / Visual Reference</th>
+                    <th className="p-4">Image / SKU</th>
                     <th className="p-4">Product Name</th>
-                    <th className="p-1 pb-4 pt-4">Category</th>
+                    <th className="p-4">Category</th>
+                    <th className="p-4 text-center">Stock</th>
+                    <th className="p-4 text-center">Status</th>
                     <th className="p-4 text-right">Pricing</th>
-                    <th className="p-4 text-center">Operation Settings</th>
+                    <th className="p-4 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-900 text-xs text-zinc-300">
-                  {products.map(p => (
-                    <tr key={p.id} className="hover:bg-zinc-900/20 transition-colors">
-                      <td className="p-4 flex items-center gap-3">
-                        <span className="text-[10px] font-mono text-zinc-500 shrink-0 select-none">{p.id}</span>
-                        <div className="w-10 h-10 rounded-lg bg-zinc-800 shrink-0 border border-zinc-750 flex items-center justify-center overflow-hidden">
-                          <div className={`w-full h-full bg-gradient-to-br ${p.image || 'from-zinc-700 to-zinc-800'}`}></div>
-                        </div>
-                      </td>
-                      <td className="p-4 font-medium text-zinc-100">{p.name}</td>
-                      <td className="p-1">
-                        <span className="px-2 py-0.5 rounded bg-zinc-850 border border-zinc-750 text-zinc-400 text-[10px] font-medium inline-block">
-                          {p.category}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right font-mono font-medium text-amber-500">${p.price.toFixed(2)}</td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            id={`edit_proc_${p.id}`}
-                            onClick={() => openEditForm(p)}
-                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-all cursor-pointer"
-                            title="Edit properties"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            id={`delete_proc_${p.id}`}
-                            onClick={() => triggerDeleteProduct(p.id, p.name)}
-                            className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800/40 rounded transition-all cursor-pointer"
-                            title="Delete product"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {products.map(p => {
+                    const mainImage = p.images?.find(i => i.isPrimary)?.url || p.images?.[0]?.url || p.image;
+                    const isGrad = mainImage && mainImage.startsWith('from-');
+                    const categoryName = p.category?.name || p.category || '—';
+                    const hasDiscount = p.discountPrice && p.discountPrice < p.price;
+                    const stockLevel = p.stock ?? null;
+
+                    return (
+                      <tr key={p.id || p._id} className="hover:bg-zinc-900/20 transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-lg shrink-0 border border-zinc-800 overflow-hidden bg-zinc-900 flex items-center justify-center">
+                              {isGrad ? (
+                                <div className={`w-full h-full bg-gradient-to-br ${mainImage}`} />
+                              ) : mainImage ? (
+                                <img src={mainImage} alt={p.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800" />
+                              )}
+                            </div>
+                            <div>
+                              {p.sku && <span className="text-[10px] font-mono text-zinc-500 block">{p.sku}</span>}
+                              <span className="text-[10px] font-mono text-zinc-700">{p.id || p._id}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 font-medium text-zinc-100 max-w-[180px]">
+                          <div className="line-clamp-1">{p.name}</div>
+                          {p.brand && <div className="text-[10px] text-zinc-500 font-mono">{p.brand}</div>}
+                        </td>
+                        <td className="p-4">
+                          <span className="px-2 py-0.5 rounded bg-zinc-850 border border-zinc-800 text-zinc-400 text-[10px] font-medium inline-block">
+                            {categoryName}
+                          </span>
+                        </td>
+                        <td className="p-4 text-center font-mono">
+                          {stockLevel === null ? (
+                            <span className="text-zinc-600">—</span>
+                          ) : stockLevel === 0 ? (
+                            <span className="text-red-400 font-semibold">Out of Stock</span>
+                          ) : stockLevel <= 5 ? (
+                            <span className="text-amber-400 font-semibold">{stockLevel} left</span>
+                          ) : (
+                            <span className="text-zinc-300">{stockLevel}</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+                            p.status === 'active' ? 'bg-green-950/40 border-green-800 text-green-400' :
+                            p.status === 'draft' ? 'bg-zinc-800 border-zinc-700 text-zinc-400' :
+                            p.status === 'archived' ? 'bg-zinc-900 border-zinc-800 text-zinc-600' :
+                            'bg-red-950/40 border-red-900 text-red-400'
+                          }`}>
+                            {p.status || 'active'}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right font-mono">
+                          {hasDiscount ? (
+                            <div>
+                              <div className="text-[10px] text-zinc-600 line-through">₹{Number(p.price).toLocaleString('en-IN')}</div>
+                              <div className="text-amber-400 font-semibold">₹{Number(p.discountPrice).toLocaleString('en-IN')}</div>
+                            </div>
+                          ) : (
+                            <span className="text-amber-500 font-semibold">₹{Number(p.price).toLocaleString('en-IN')}</span>
+                          )}
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              id={`edit_proc_${p.id || p._id}`}
+                              onClick={() => openEditForm(p)}
+                              className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-all cursor-pointer"
+                              title="Edit product"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              id={`delete_proc_${p.id || p._id}`}
+                              onClick={() => triggerDeleteProduct(p.id || p._id, p.name)}
+                              className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-zinc-800/40 rounded transition-all cursor-pointer"
+                              title="Deactivate product"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -168,6 +222,7 @@ export default function AdminView({
 
         </div>
       )}
+
 
       {/* SUB-TAB: Orders management table */}
       {adminSubTab === 'orders' && (

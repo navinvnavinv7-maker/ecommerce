@@ -1,7 +1,9 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import { orders as memoryOrders } from '../models/memoryDB.js';
+import { orders as memoryOrders, products as memoryProducts } from '../models/memoryDB.js';
 import Order from '../models/Order.js';
+import Product from '../models/Product.js';
+import { verifyToken, verifyAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -17,11 +19,13 @@ const mapOrder = (o) => {
   };
 };
 
-// GET all orders
-router.get('/', async (req, res) => {
+// GET orders
+router.get('/', verifyToken, async (req, res) => {
+  const { email, role } = req.user;
   try {
     if (isDbConnected()) {
-      const dbOrders = await Order.find({}).sort({ createdAt: -1 });
+      const query = role === 'admin' ? {} : { email: email.toLowerCase() };
+      const dbOrders = await Order.find(query).sort({ createdAt: -1 });
       return res.json(dbOrders.map(mapOrder));
     }
   } catch (err) {
@@ -29,7 +33,11 @@ router.get('/', async (req, res) => {
   }
 
   // Fallback to memory
-  res.json(memoryOrders.map(mapOrder));
+  if (role === 'admin') {
+    res.json(memoryOrders.map(mapOrder));
+  } else {
+    res.json(memoryOrders.filter(o => o.email.toLowerCase() === email.toLowerCase()).map(mapOrder));
+  }
 });
 
 // GET specific order summary
@@ -60,9 +68,10 @@ router.get('/:id', async (req, res) => {
   res.json(mapOrder(ord));
 });
 
-// LODGE / CREATE new purchase order
-router.post('/', async (req, res) => {
-  const { items, shippingAddress, email, subtotal, total } = req.body;
+// LODGE / CREATE new purchase order (with stock validation & decrement)
+router.post('/', verifyToken, async (req, res) => {
+  const { items, shippingAddress, subtotal, total } = req.body;
+  const email = req.user.email;
 
   if (!items || !items.length || !shippingAddress || !email) {
     return res.status(400).json({ error: "Cannot place order: missing item listings, shipment details, or contact email." });
@@ -75,7 +84,9 @@ router.post('/', async (req, res) => {
       id: item.id || item._id,
       name: item.name,
       price: item.price,
-      quantity: item.quantity
+      quantity: item.quantity,
+      variantName: item.variantName || null,
+      variantValue: item.variantValue || null
     })),
     shippingAddress: {
       fullName: shippingAddress.fullName,
@@ -92,6 +103,71 @@ router.post('/', async (req, res) => {
 
   try {
     if (isDbConnected()) {
+      // ── Stock Validation (MongoDB path) ──────────────────────────────
+      const stockErrors = [];
+
+      for (const item of items) {
+        const productId = item.id || item._id;
+        let prod = null;
+        if (mongoose.Types.ObjectId.isValid(productId)) {
+          prod = await Product.findById(productId);
+        }
+        if (!prod) {
+          prod = await Product.findOne({ $or: [{ sku: productId }, { slug: productId }] });
+        }
+        if (!prod) {
+          stockErrors.push(`Product "${item.name}" not found.`);
+          continue;
+        }
+
+        // Check variant stock if variant was selected
+        if (item.variantName && item.variantValue) {
+          const variant = prod.variants.find(
+            v => v.name === item.variantName && v.value === item.variantValue
+          );
+          if (!variant) {
+            stockErrors.push(`Variant "${item.variantValue}" for "${item.name}" not found.`);
+          } else if (variant.stock < item.quantity) {
+            stockErrors.push(`Insufficient stock for "${item.name}" (${item.variantValue}). Available: ${variant.stock}, Requested: ${item.quantity}`);
+          }
+        } else {
+          if (prod.stock < item.quantity) {
+            stockErrors.push(`Insufficient stock for "${item.name}". Available: ${prod.stock}, Requested: ${item.quantity}`);
+          }
+        }
+      }
+
+      if (stockErrors.length > 0) {
+        return res.status(400).json({ error: "Stock validation failed.", details: stockErrors });
+      }
+
+      // ── Decrement Stock After Validation Passes ───────────────────────
+      for (const item of items) {
+        const productId = item.id || item._id;
+        let prod = null;
+        if (mongoose.Types.ObjectId.isValid(productId)) {
+          prod = await Product.findById(productId);
+        }
+        if (!prod) {
+          prod = await Product.findOne({ $or: [{ sku: productId }, { slug: productId }] });
+        }
+        if (!prod) continue;
+
+        if (item.variantName && item.variantValue) {
+          const varIdx = prod.variants.findIndex(
+            v => v.name === item.variantName && v.value === item.variantValue
+          );
+          if (varIdx !== -1) {
+            prod.variants[varIdx].stock = Math.max(0, prod.variants[varIdx].stock - item.quantity);
+            prod.markModified('variants');
+          }
+        } else {
+          prod.stock = Math.max(0, prod.stock - item.quantity);
+          prod.stockUpdatedAt = new Date();
+        }
+        await prod.save();
+      }
+
       const newOrder = new Order(orderData);
       await newOrder.save();
       return res.status(201).json(mapOrder(newOrder));
@@ -100,7 +176,25 @@ router.post('/', async (req, res) => {
     console.error('MongoDB Order creation error:', err.message);
   }
 
-  // Fallback to memory DB
+  // ── Fallback: Memory DB with stock validation & decrement ─────────────
+  const memStockErrors = [];
+  for (const item of items) {
+    const prod = memoryProducts.find(p => p.id === (item.id || item._id) || p._id === (item.id || item._id));
+    if (prod && prod.stock !== undefined && prod.stock < item.quantity) {
+      memStockErrors.push(`Insufficient stock for "${item.name}". Available: ${prod.stock}, Requested: ${item.quantity}`);
+    }
+  }
+  if (memStockErrors.length > 0) {
+    return res.status(400).json({ error: "Stock validation failed.", details: memStockErrors });
+  }
+
+  for (const item of items) {
+    const prod = memoryProducts.find(p => p.id === (item.id || item._id) || p._id === (item.id || item._id));
+    if (prod && prod.stock !== undefined) {
+      prod.stock = Math.max(0, prod.stock - item.quantity);
+    }
+  }
+
   const generatedId = "ord-" + Math.floor(1000 + Math.random() * 9000);
   const memoryOrder = {
     _id: generatedId,
@@ -113,7 +207,7 @@ router.post('/', async (req, res) => {
 });
 
 // UPDATE order fulfillment status
-router.put('/:id', async (req, res) => {
+router.put('/:id', verifyAdmin, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
@@ -147,7 +241,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE order
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyAdmin, async (req, res) => {
   const { id } = req.params;
 
   try {
